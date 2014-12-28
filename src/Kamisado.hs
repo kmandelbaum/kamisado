@@ -1,7 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Kamisado 
-( Color(..),Coord(..), Position, PlayerId(..), GameState(..), fieldSize, getWizzard, Move(..),
-  GameOutput(..),PlayerDecision(..), initState, colorMap, acceptPlayerDecision, unCoord, Wizzard(..) )
+( Color(..),Coord(..), Position, PlayerId(..), GameState(..), fieldSize, getWizzard, Move(..), isOkMove, isWon,
+  GameOutput(..),PlayerDecision(..), initState, colorMap, acceptPlayerDecision, unCoord, Wizzard(..), isPlayersMove )
 where
 
 import qualified Data.Bimap as BM
@@ -34,6 +34,10 @@ data Move = Move Position Position deriving (Eq, Show)
 data PlayerDecision = MakeMove Move deriving ( Eq, Show )
 
 data GameOutput = OKMove Move | IllegalMove deriving ( Eq, Show )
+
+isOkMove :: GameOutput -> Bool
+isOkMove (OKMove _) = True
+isOkMove _ = False
 
 fieldSize :: Coord
 fieldSize = 8
@@ -90,7 +94,7 @@ acceptPlayerDecision g@(GameState posMap curPlayer colorToMove won) (MakeMove m@
     newPosMap = BM.delete fromPos $ BM.insert toPos wiz posMap
     nextWizzard = checkRepetition S.empty (nextPlayer curPlayer, colorMap M.! toPos)
 
-    (newPlayer, newColor) = if isJust nextWizzard then fromJust nextWizzard else (curPlayer, fromJust colorToMove)
+    (newPlayer, newColor) = if isJust nextWizzard then fromJust nextWizzard else (nextPlayer curPlayer, fromJust colorToMove)
     
     newWon = if curPlayer == Black && snd toPos == fieldSize - 1 then Just Black
         else if curPlayer == White && snd toPos == 0 then Just White
@@ -98,7 +102,7 @@ acceptPlayerDecision g@(GameState posMap curPlayer colorToMove won) (MakeMove m@
 
     canMove w@(p,c) = or $ map (flip BM.notMember newPosMap) $ zip posXs posYs
       where (posX,posY) = newPosMap BM.!> w
-            posXs = filter ( \x -> x >=0 && x <= fieldSize ) [posX, posX - 1, posX + 1]
+            posXs = filter ( \x -> x >=0 && x < fieldSize ) [posX, posX - 1, posX + 1]
             posYs = repeat $ if p == Black then posY + 1 else posY - 1
 
     checkRepetition s w@(p,c) 
@@ -108,3 +112,10 @@ acceptPlayerDecision g@(GameState posMap curPlayer colorToMove won) (MakeMove m@
   
 getWizzard :: GameState -> Position -> Maybe Wizzard
 getWizzard = (flip BM.lookup) . _posMap
+
+isPlayersMove :: PlayerId -> GameState -> Bool
+isPlayersMove p (GameState _ curPlayer _ won) = isNothing won && p == curPlayer
+
+isWon :: GameState -> Bool
+isWon (GameState _ p _ (Just wp)) = p /= wp
+isWon _ = False

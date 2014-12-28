@@ -10,8 +10,8 @@ import Data.Ord
 import Control.Exception( assert )
 import Utility
 
-allMoves :: GameState -> [ (Move, GameState) ]
-allMoves g@(GameState posMap curPlayer colorToMove won) 
+allMoves' :: GameState -> [ (Move, GameState) ]
+allMoves' g@(GameState posMap curPlayer colorToMove won) 
   | isJust won = []
   | isJust colorToMove = allMovesWithColor g (fromJust colorToMove)
   | otherwise = concatMap (allMovesWithColor g) (enumFrom minBound)
@@ -26,10 +26,7 @@ allMoves g@(GameState posMap curPlayer colorToMove won)
         possibleTargets = goDir (1, dy) ++ goDir (0, dy) ++ goDir (-1, dy)
         possibleMoves = map (Move initPos) possibleTargets
         resultingStates = map (fst . acceptPlayerDecision gs . MakeMove) possibleMoves
-        filterAndUpdate g'@(GameState _ newPlayer (Just newCol) won) 
-          | isJust won || newPlayer /= curPlayer = [g']
-          | otherwise = map snd $ allMovesWithColor g' newCol
-        result = concat $ zipWith (\m s -> zip (repeat m) (filterAndUpdate s)) possibleMoves resultingStates
+        result = zip possibleMoves resultingStates
 
 winScore :: Int
 winScore = 1000
@@ -43,9 +40,11 @@ evaluate (GameState posMap _ _ won)
     score w = unCoord $ snd $ (posMap BM.!> w)
 
 bestMove :: GameState -> Move
-bestMove g = fst $ (if' isMax maximumBy minimumBy) (comparing snd) scoredMoves
+bestMove g = fst $ (if' (isMax g) maximumBy minimumBy) (comparing snd) scoredMoves
   where
-    nextPosFun = map snd . allMoves
-    possibleMoves = allMoves g
-    isMax = _curPlayer g == Black
-    scoredMoves = map (over _2 (\g -> alphabeta (not isMax) g nextPosFun evaluate 1000)) possibleMoves
+    nextPosFun = map snd . allMoves'
+    possibleMoves = allMoves' g
+    scoredMoves = map (over _2 (\g -> alphabeta isMax g nextPosFun evaluate 1000)) possibleMoves
+
+isMax :: GameState -> Bool
+isMax (GameState _ p _ _) = p == Black

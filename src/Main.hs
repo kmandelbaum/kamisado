@@ -17,6 +17,11 @@ import Data.Bits
 import Control.Applicative
 import Data.Maybe
 import KamisadoAI
+import Utility
+import Control.Concurrent
+
+aiPlayerID :: PlayerId
+aiPlayerID = White
 
 (<@>) :: Behavior (a -> b) -> Event a -> Event b
 (<@>) = flip $ snapshot (flip ($)) 
@@ -79,7 +84,6 @@ mkMouseEvent x y buttonsInt = Return $ Mouse x y $ ButtonsMask (bit 0) (bit 1) (
 mkCellSizeChangedEvent :: Int -> Return Int
 mkCellSizeChangedEvent = Return
 
-
 defReactiveMethod' :: ( Marshal tt, Typeable tt, FunSuffix a es, MethodSuffix(ChangeRtn es (IO ())))
                         => String -> es -> Reactive (Member tt, Event a)
 defReactiveMethod' name e = do
@@ -89,14 +93,12 @@ defReactiveMethod' name e = do
 type MouseEvents = (Event Mouse, Event Mouse, Event Mouse)
 data Drag = Drag { _dragGamePos::Position, _dragScreenPos:: (Int, Int) } deriving Show
 
-changeGameState :: Maybe Drag -> Position -> (GameState -> GameState)
-changeGameState Nothing _ = id
-changeGameState (Just (Drag dragPos _)) dropPos = 
-  \g -> fst $ acceptPlayerDecision g $ MakeMove (Move dragPos dropPos)
+changeGameState :: GameState -> Move -> Maybe GameState
+changeGameState g m = ifF (isOkMove . snd) (Just . fst) (const Nothing) $
+  acceptPlayerDecision g (MakeMove m)
 
 playGame :: MouseEvents -> Behavior Int -> GameState -> Reactive (Behavior GameState, Behavior [Piece])
 playGame (eMouseDown, eMouseUp, eMouseMove) bCellSize i = do 
-
   let
     toCell s (x,y) = (Coord $ x `div` s, Coord $ y `div` s)
     toDrag g s m@(Mouse x y _) = let p = toCell s (x,y) in Drag p (x,y) <$ getWizzard g p
@@ -109,15 +111,18 @@ playGame (eMouseDown, eMouseUp, eMouseMove) bCellSize i = do
         
     eMouse = eMouseMove `merge` eMouseDown `merge` eMouseUp
   rec
-    bGameState <- accum i eGameState
+    bGameState <- hold i eGameState
     bDrag <- hold Nothing $ (Just <$> eDrag) `merge` (const Nothing <$> eDrop)
+    (eAIMove, makeAIMove) <- newEvent
     let
       eDrag = filterJust $ toDrag <$> bGameState <*> bCellSize <@> eMouseDown
       eDrop = toCell <$> bCellSize <@> (toXY <$> eMouseUp)
-      eGameState = changeGameState <$> bDrag <@> eDrop
- 
+      ePlayerMove = filterJust $ ( \drag drop -> (flip ( Move . _dragGamePos ) drop) <$> drag) <$> bDrag <@> eDrop
+      eGameState = filterJust $ changeGameState <$> bGameState <@> ( ePlayerMove `merge` eAIMove )
+      eAIStartThinking = filterJust $ ( ifF (isPlayersMove aiPlayerID) Just (const Nothing) ) <$> eGameState
+
   bMouseXY <- hold (0,0) $ (\(Mouse x y _) -> (x,y)) <$> eMouse
-  listen (flip ($) <$> bGameState <@> eGameState) (print . bestMove)
+  listen eAIStartThinking (\g -> (forkIO . sync . makeAIMove . bestMove) g >> return ())
   let bPieces = toPieces <$> bGameState <*> bDrag <*> bMouseXY <*> bCellSize
 
   return (bGameState, bPieces) 
