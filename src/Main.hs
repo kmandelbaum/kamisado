@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies,DeriveDataTypeable, ScopedTypeVariables, FlexibleContexts, RecursiveDo #-}
+{-# LANGUAGE TypeFamilies,DeriveDataTypeable, ScopedTypeVariables, FlexibleContexts, RecursiveDo, BangPatterns #-}
 import Graphics.QML
 import Data.Text (Text)
 import FRP.Sodium
@@ -120,9 +120,15 @@ playGame (eMouseDown, eMouseUp, eMouseMove) bCellSize i = do
       ePlayerMove = filterJust $ ( \drag drop -> (flip ( Move . _dragGamePos ) drop) <$> drag) <$> bDrag <@> eDrop
       eGameState = filterJust $ changeGameState <$> bGameState <@> ( ePlayerMove `merge` eAIMove )
       eAIStartThinking = filterJust $ ( ifF (isPlayersMove aiPlayerID) Just (const Nothing) ) <$> eGameState
+--(isPlayersMove aiPlayerID)
+      aiThread g = do
+        let !(m,n) = bestMove g
+        print (m,n)
+        sync $ makeAIMove m
 
   bMouseXY <- hold (0,0) $ (\(Mouse x y _) -> (x,y)) <$> eMouse
-  listen eAIStartThinking (\g -> (forkIO . sync . makeAIMove . bestMove) g >> return ())
+  listen eAIStartThinking (\g -> forkIO (aiThread g) >> return ())
+  listen ePlayerMove print
   let bPieces = toPieces <$> bGameState <*> bDrag <*> bMouseXY <*> bCellSize
 
   return (bGameState, bPieces) 

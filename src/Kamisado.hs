@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Kamisado 
-( Color(..),Coord(..), Position, PlayerId(..), GameState(..), fieldSize, getWizzard, Move(..), isOkMove, isWon,
+( Color(..),Coord(..), Position, PlayerId(..), GameState(..), fieldSize, getWizzard, Move(..), isOkMove,
   GameOutput(..),PlayerDecision(..), initState, colorMap, acceptPlayerDecision, unCoord, Wizzard(..), isPlayersMove )
 where
 
@@ -27,9 +27,9 @@ type Wizzard = (PlayerId, Color)
 type Map = M.Map
 type Bimap = BM.Bimap
 
-data GameState = GameState { _posMap :: Bimap Position Wizzard, _curPlayer :: PlayerId, _colorToMove :: Maybe Color, _wonBy :: Maybe PlayerId } deriving (Show)
+data GameState = GameState { _posMap :: Bimap Position Wizzard, _curPlayer :: PlayerId, _colorToMove :: Maybe Color, _wonBy :: Maybe PlayerId, _turnNo :: Int } deriving (Show)
 
-data Move = Move Position Position deriving (Eq, Show)
+data Move = Move Position Position deriving (Eq, Show, Ord)
 
 data PlayerDecision = MakeMove Move deriving ( Eq, Show )
 
@@ -63,15 +63,15 @@ colorMap = M.fromList $ zip (coords >>= zip coords . repeat) rows
     range = (0,maxCoord)
 
 initState :: GameState
-initState = GameState posMap Black Nothing Nothing
+initState = GameState posMap Black Nothing Nothing 0
   where 
     posMap = BM.fromList $ row 0 Black ++ row (fieldSize-1) White
     row y p = map ( \x -> ( (x,y), (p, colorMap M.! (x, y)) ) ) coords
 
 acceptPlayerDecision :: GameState -> PlayerDecision -> (GameState, GameOutput)
-acceptPlayerDecision g@(GameState posMap curPlayer colorToMove won) (MakeMove m@(Move fromPos toPos))
+acceptPlayerDecision g@(GameState posMap curPlayer colorToMove won turnNo) (MakeMove m@(Move fromPos toPos))
   | isJust won = (g, IllegalMove)
-  | isLegalBoard && isLegalWiz && isLegalWay = (GameState newPosMap newPlayer (Just newColor) newWon, OKMove m)
+  | isLegalBoard && isLegalWiz && isLegalWay = (GameState newPosMap newPlayer (Just newColor) newWon (turnNo + 1), OKMove m)
   | otherwise = (g, IllegalMove)
   where
     posDelta@(posDeltaX, posDeltaY) = toPos - fromPos
@@ -114,8 +114,4 @@ getWizzard :: GameState -> Position -> Maybe Wizzard
 getWizzard = (flip BM.lookup) . _posMap
 
 isPlayersMove :: PlayerId -> GameState -> Bool
-isPlayersMove p (GameState _ curPlayer _ won) = isNothing won && p == curPlayer
-
-isWon :: GameState -> Bool
-isWon (GameState _ p _ (Just wp)) = p /= wp
-isWon _ = False
+isPlayersMove p (GameState _ curPlayer _ won _) = isNothing won && p == curPlayer
