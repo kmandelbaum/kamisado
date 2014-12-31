@@ -97,8 +97,8 @@ changeGameState :: GameState -> Move -> Maybe GameState
 changeGameState g m = ifF (isOkMove . snd) (Just . fst) (const Nothing) $
   acceptPlayerDecision g (MakeMove m)
 
-playGame :: MouseEvents -> Behavior Int -> GameState -> Reactive (Behavior GameState, Behavior [Piece])
-playGame (eMouseDown, eMouseUp, eMouseMove) bCellSize i = do 
+playGame :: MouseEvents -> Behavior Int -> Event () -> GameState -> Reactive (Behavior GameState, Behavior [Piece])
+playGame (eMouseDown, eMouseUp, eMouseMove) bCellSize eNewGame i = do 
   let
     toCell s (x,y) = (Coord $ x `div` s, Coord $ y `div` s)
     toDrag g s m@(Mouse x y _) = let p = toCell s (x,y) in Drag p (x,y) <$ getWizzard g p
@@ -111,7 +111,7 @@ playGame (eMouseDown, eMouseUp, eMouseMove) bCellSize i = do
         
     eMouse = eMouseMove `merge` eMouseDown `merge` eMouseUp
   rec
-    bGameState <- hold i eGameState
+    bGameState <- hold i $ eGameState `merge` (const i <$> eNewGame)
     bDrag <- hold Nothing $ (Just <$> eDrag) `merge` (const Nothing <$> eDrop)
     (eAIMove, makeAIMove) <- newEvent
     let
@@ -119,8 +119,7 @@ playGame (eMouseDown, eMouseUp, eMouseMove) bCellSize i = do
       eDrop = toCell <$> bCellSize <@> (toXY <$> eMouseUp)
       ePlayerMove = filterJust $ ( \drag drop -> (flip ( Move . _dragGamePos ) drop) <$> drag) <$> bDrag <@> eDrop
       eGameState = filterJust $ changeGameState <$> bGameState <@> ( ePlayerMove `merge` eAIMove )
-      eAIStartThinking = filterJust $ ( ifF (isPlayersMove aiPlayerID) Just (const Nothing) ) <$> eGameState
---(isPlayersMove aiPlayerID)
+      eAIStartThinking = filterJust $ ( ifF ((||False).isPlayersMove aiPlayerID) Just (const Nothing) ) <$> eGameState
       aiThread g = do
         let !(m,n) = bestMove g
         print (m,n)
@@ -138,14 +137,15 @@ main = do
     (mouseDownMethod, eMouseDown :: Event Mouse) <- sync $ defReactiveMethod' "mouseDown" mkMouseEvent
     (mouseUpMethod, eMouseUp :: Event Mouse) <- sync $ defReactiveMethod' "mouseUp" mkMouseEvent
     (mouseMoveMethod, eMouseMove :: Event Mouse) <- sync $ defReactiveMethod' "mouseMove" mkMouseEvent
+    (newGameMethod, eNewGame :: Event () ) <- sync $ defReactiveMethod' "newGame" ( Return () )
 
     (cellSizeChangedMethod, eCellSizeChanged :: Event Int) <- sync $ defReactiveMethod' "cellSizeChanged" mkCellSizeChangedEvent 
 
     bCellSize <- sync $ hold 1 (filterE (/=0) eCellSizeChanged )
 
-    (bGameState, bPieces) <- sync $ playGame (eMouseDown, eMouseUp, eMouseMove) bCellSize initState
+    (bGameState, bPieces) <- sync $ playGame (eMouseDown, eMouseUp, eMouseMove) bCellSize eNewGame initState
 
-    let eventMethods = [mouseDownMethod, mouseUpMethod, mouseMoveMethod, cellSizeChangedMethod]
+    let eventMethods = [mouseDownMethod, mouseUpMethod, mouseMoveMethod, cellSizeChangedMethod, newGameMethod]
 
     ( skvFieldModel :: SignalKey (IO()) ) <- newSignalKey
     ( skvPiecesModel :: SignalKey (IO()) ) <- newSignalKey
