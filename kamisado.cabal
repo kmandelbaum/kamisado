@@ -19,7 +19,7 @@ executable kamisado
   main-is:             Main.hs
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base >=4.7 && <4.8, NumInstances, containers, bimap, vector, array, sodium, text, random, hsqml, lens, deepseq
+  build-depends:       base >=4.7 && <4.8, NumInstances, containers, bimap, vector, array, sodium, text, random, hsqml, lens, deepseq, memoize, parallel
   hs-source-dirs:      src
   default-language:    Haskell98
-  ghc-options:         -threaded -rtsopts -O2
+  ghc-options:         -threaded -rtsopts -O3

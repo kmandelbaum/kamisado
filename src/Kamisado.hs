@@ -29,9 +29,9 @@ type Bimap = BM.Bimap
 
 data GameState = GameState { _posMap :: Bimap Position Wizzard, _curPlayer :: PlayerId, _colorToMove :: Maybe Color, _wonBy :: Maybe PlayerId, _turnNo :: Int } deriving (Show)
 
-data Move = Move Position Position deriving (Eq, Show, Ord)
+data Move = Move !Position !Position deriving (Eq, Show, Ord)
 
-data PlayerDecision = MakeMove Move deriving ( Eq, Show )
+data PlayerDecision = MakeMove !Move deriving ( Eq, Show )
 
 data GameOutput = OKMove Move | IllegalMove deriving ( Eq, Show )
 
