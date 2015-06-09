@@ -3,10 +3,10 @@ module AI where
 import Utility
 
 {-# INLINE alphabeta #-}
-alphabeta :: ( Ord score, Bounded score, Show position ) => (position -> Bool) -> position -> ( position -> [ position ] ) -> ( position -> score ) -> Int -> score
-alphabeta isMaxFun pos moves evaluate nodes = dynamic
+alphabeta :: ( Ord score, Show position ) => (position -> Bool) -> position -> ( position -> [ position ] ) -> ( position -> score ) -> score -> score -> Int -> score
+alphabeta isMaxFun pos moves evaluate minScore maxScore nodes = dynamic
   where
-    dynamic = fst $ optimize pos minBound maxBound nodes
+    dynamic = fst $ optimize pos minScore maxScore nodes
     optimize pos' alpha beta maxNodes 
       | maxNodes <= 1 || null allMoves = (evaluate pos', 0)
       | otherwise = go ( if isMax then alpha else beta, maxNodes) allMoves (length allMoves)
